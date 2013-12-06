@@ -3,6 +3,8 @@
 from subprocess import Popen, PIPE
 import sys
 
+import requests
+
 class ConfigAttributeError(AttributeError):
   def __init__(self, section, prop):
     self.prop = '%s.%s' % (section, prop)
@@ -11,17 +13,35 @@ class ConfigAttributeError(AttributeError):
     super(ConfigAttributeError, self).__init__(self, self.msg)
 
 def git_config(section, prop):
-  '''Returns the value of a property set in the git configuration'''
+  """Returns the value of a property set in the git configuration"""
   pipe = Popen('git config %s.%s' % (section, prop), stdout=PIPE, shell=True)
   value = pipe.stdout.read().strip()
   if not value:
     raise ConfigAttributeError(section, prop)
   return value
 
+def get_cards(key, token, board_id, member_name):
+  """Uses the Trello REST API to print cards assigned to a member"""
+  params = {'key': key, 'token': token}
+  url = 'https://api.trello.com/1/boards/%s/members/%s/cards' % (board_id, member_name)
+  response = requests.get(url, params=params)
+  data = response.json()
+
+  print 'Your cards:'
+  for card in data:
+    print '  - %s' % card['name']
+
 if __name__ == '__main__':
+  # Ensure all necessary parameters are defined.
   try:
     print 'Hello, %s!' % git_config('user', 'name')
+    trello_key = git_config('trello', 'key')
+    trello_token = git_config('trello', 'token')
+    trello_board_id = git_config('trello', 'board-id')
+    trello_member_name = git_config('trello', 'member-name')
   except ConfigAttributeError as e:
     message = '%s\nRun:\n\n    %s\n' % (e.msg, e.cmd)
     sys.stderr.write(message)
     sys.exit(1)
+
+  get_cards(trello_key, trello_token, trello_board_id, trello_member_name)
