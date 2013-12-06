@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from subprocess import Popen, PIPE
+import string
 import sys
 
 import requests
@@ -20,16 +21,49 @@ def git_config(section, prop):
     raise ConfigAttributeError(section, prop)
   return value
 
-def get_cards(key, token, board_id, member_name):
+def git_append(msg):
+  """Appends msg to the last commit"""
+  pipe = Popen('git log -1 --pretty=%B', stdout=PIPE, shell=True)
+  old_msg = pipe.stdout.read()
+  new_msg = '%s\n%s' % (old_msg.rstrip(), msg)
+
+  pipe = Popen('git commit --amend --file=-', stdin=PIPE, shell=True)
+  pipe.communicate(new_msg)
+
+def format_card(card):
+  return 'Resolves Trello card "%s" <%s>' % (card['name'], card['shortUrl'])
+
+def get_card(key, token, board_id, member_name):
   """Uses the Trello REST API to print cards assigned to a member"""
+
+  # Make GET request
   params = {'key': key, 'token': token}
   url = 'https://api.trello.com/1/boards/%s/members/%s/cards' % (board_id, member_name)
   response = requests.get(url, params=params)
   data = response.json()
 
+  # Show user cards listing.
+  count = len(data)
+  max_len = len(str(count))
   print 'Your cards:'
-  for card in data:
-    print '  - %s' % card['name']
+  for i in range(count):
+    card = data[i]
+    print '  [%s] %s' % (string.rjust(str(i + 1), max_len, ' '), card['name'])
+  print
+
+  # Prompt user to choose a card.
+  while True:
+    choice = raw_input('Pick a card, any card [Q/%d-%d]: ' % (1, count))
+    if choice == 'q' or choice == 'Q':
+      return
+
+    try:
+      i = int(choice)
+    except ValueError:
+      continue
+
+    if 1 <= i <= count:
+      return data[i - 1]
 
 if __name__ == '__main__':
   # Ensure all necessary parameters are defined.
@@ -44,4 +78,9 @@ if __name__ == '__main__':
     sys.stderr.write(message)
     sys.exit(1)
 
-  get_cards(trello_key, trello_token, trello_board_id, trello_member_name)
+  # Ask user for card, and append it to commit message.
+  card = get_card(trello_key, trello_token, trello_board_id, trello_member_name)
+  if card is not None:
+    msg = format_card(card)
+    git_append(msg)
+
