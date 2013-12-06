@@ -1,3 +1,27 @@
 #!/usr/bin/env python
 
-print 'Hello World!'
+from subprocess import Popen, PIPE
+import sys
+
+class ConfigAttributeError(AttributeError):
+  def __init__(self, section, prop):
+    self.prop = '%s.%s' % (section, prop)
+    self.cmd = 'git config %s "%s"' % (self.prop, prop)
+    self.msg = '%s not found in git configuration.' % prop
+    super(ConfigAttributeError, self).__init__(self, self.msg)
+
+def git_config(section, prop):
+  '''Returns the value of a property set in the git configuration'''
+  pipe = Popen('git config %s.%s' % (section, prop), stdout=PIPE, shell=True)
+  value = pipe.stdout.read().strip()
+  if not value:
+    raise ConfigAttributeError(section, prop)
+  return value
+
+if __name__ == '__main__':
+  try:
+    print 'Hello, %s!' % git_config('user', 'name')
+  except ConfigAttributeError as e:
+    message = '%s\nRun:\n\n    %s\n' % (e.msg, e.cmd)
+    sys.stderr.write(message)
+    sys.exit(1)
